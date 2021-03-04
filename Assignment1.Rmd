@@ -1,0 +1,172 @@
+---
+title: "An Investigation into Toronto Shelter Occupancy Rates in 2019"
+author: "[Leuven Wang]"
+subtitle: Initially Completed 24/1/2021. Revised 4/3/2021.
+output:
+  pdf_document: default
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(openintro)
+library(tidyverse)
+```
+
+## Data
+
+
+The Daily Shelter Occupancy Data from the Shelter, Support, and Housing Administration of the City of Toronto measures the daily occupancy of each active shelter in the City of Toronto area in 2019. These shelters provide temporary accommodation and other social services for the homeless or others at risk. Measuring statistics from these shelters can help us understand the
+social and economic problems that challenge us. Occupancy is counted by shelter workers and defined as the number of people in the shelter at 4am the next morning. So the occupancy of January 1st will be the number of people in the shelter at 4am on January 2nd.
+
+```{r, include = FALSE}
+
+# Here you can load in and clean the data (you may need to do the cleaning in a separate R script). 
+library(opendatatoronto)
+library(dplyr)
+
+shelterdata <- show_package("8a6eceb2-821b-4961-a29d-758f3087732d")
+shelterresources <- list_package_resources("8a6eceb2-821b-4961-a29d-758f3087732d")
+datastore_resources <- filter(shelterresources, tolower(format) %in% c('csv', 'geojson'))	
+data <- filter(datastore_resources, row_number()==1) %>% get_resource()
+
+data <- data %>% select(OCCUPANCY_DATE,SHELTER_NAME,SECTOR,OCCUPANCY,CAPACITY)
+data <- data %>% group_by(OCCUPANCY_DATE,SHELTER_NAME,SECTOR) %>% summarise(OCCUPANCY = sum(OCCUPANCY),CAPACITY=sum(CAPACITY))
+data <- data %>% mutate(OCCUPANCY_RATIO=OCCUPANCY/CAPACITY)
+data <- data %>% drop_na()
+data$OCCUPANCY_DATE <- substr(data$OCCUPANCY_DATE,0,10)
+
+```
+
+The data is fairly comprehensive although some shelters failed to record their capacities. These shelters have been removed from the record as they do not reveal anything about occupancy rates which will be the focus of our investigation. The column OCCUPANCY_DATE has also been changed so only the date is shown, cutting out the time which was the same for each entry and provided no
+additional information. Some single facilities may have different programs and were registered as different records. For simplicity, this has been changed so that all programs within the same facility are registered under one record that reflects their total occupancy and capacity unless these programs were separated by sector. A new column has also been added to display the occupancy ratio of that particular shelter at that time. Finally, a number of unimportant columns
+that are irrelevant to our investigation have been removed to create simplicity and save processing time.
+\newline
+\newline
+
+Initial Important Variables:
+\newline
+OCCUPANCY_DATE - Date of Recording. Recorded as the date before the time of
+recording
+\newline
+SHELTER_NAME - Name of the shelter
+\newline
+SECTOR - Categorical data. The sort of person whom the shelter takes in. Can be women, men, youth, co-ed, or family.
+\newline
+OCCUPANCY - Numerical data. Occupants in the shelter, as counted by the number of occupants at 4am of the next day.
+\newline
+CAPACITY - Numerical data. The number of beds, mats, and cots, available. In most cases this is the amount of individuals that the shelter can serve at any one time although in family cases they could exceed capacity as family members can share the same bed/mat/cot.
+\newline
+\newline
+Additional Important Variables:
+\newline
+OCCUPANCY_RATIO - Numerical data. OCCUPANCY divided by CAPACITY. The occupancy ratio may sometimes exceed 1. This is because it is possible for families to live in a room where there are less spaces than there are family members.
+\newline
+\newline
+
+
+```{r, echo=FALSE}
+
+mean_occupancy_ratio <- mean(data$OCCUPANCY_RATIO)
+
+variance_occupancy_ratio <- var(data$OCCUPANCY_RATIO)
+
+mean_occupancy_ratio_by_sector <- data %>% group_by(SECTOR) %>% summarise(mean_occupancy_ratio=mean(OCCUPANCY_RATIO))
+
+max_occupancy_ratio_by_sector <- mean_occupancy_ratio_by_sector %>% filter(mean_occupancy_ratio==max(mean_occupancy_ratio))
+
+min_occupancy_ratio_by_sector <- mean_occupancy_ratio_by_sector %>% filter(mean_occupancy_ratio==min(mean_occupancy_ratio))
+
+mean_occupancy_ratio_by_date <- data %>% group_by(OCCUPANCY_DATE) %>% summarise(mean_occupancy_ratio=mean(OCCUPANCY_RATIO))
+
+max_occupancy_ratio_by_date <- mean_occupancy_ratio_by_date %>% filter(mean_occupancy_ratio==max(mean_occupancy_ratio))
+
+min_occupancy_ratio_by_date <- mean_occupancy_ratio_by_date %>% filter(mean_occupancy_ratio==min(mean_occupancy_ratio))
+
+
+```
+
+|**Title**                              | **Figure** |
+----------------------------------      | -----------------
+| Mean Occupancy Rate                   |`r mean_occupancy_ratio`|
+----------------------------------      | -----------------
+| Variance of Occupancy Rate            |`r variance_occupancy_ratio`|
+----------------------------------      | -----------------
+|Sector w/ Largest Mean Occupancy Rate  | `r max_occupancy_ratio_by_sector$SECTOR` |
+----------------------------------      | -----------------
+| Sector w/ Smallest Mean Occupancy Rate| `r min_occupancy_ratio_by_sector$SECTOR` |
+----------------------------------      | -----------------
+| Date w/ Largest Mean Occupancy Rate   | `r max_occupancy_ratio_by_date$OCCUPANCY_DATE`|
+----------------------------------      | -----------------
+|  Date w/ Smallest Mean Occupancy Rate | `r min_occupancy_ratio_by_date$OCCUPANCY_DATE`|
+
+\center __Table of Numerical Summaries of Daily Shelter Occupancy Data__ \flushleft
+
+6 numerical summaries have been discerned from this data. The first two measure the center and spread of the mean occupancy rate across all shelters on all days by calculating their mean and variance. This is important to determine how generally in use these shelters are and how much their usage fluctuates. There is apparently not that much fluctuation.
+\newline
+The next two numbers measure the occupancy rate for each sector of clientele and determine which sectors have the highest and lowest occupancy rates. This offers us precious insight into what types of people are most at risk and what sort of facilities are most in use. This is important to problems concerning resource allocation, awareness of violence against women, and poverty.
+\newline
+The last two figures track the dates at which the mean occupancy rate across all shelters are highest and lowest. This helps us determine on which day of the year shelters are most in use. This allows us to hypothesize if seasons have any effect on shelter usage and can thus help us to understand the problem of homelessness from a day by day perspective. It also contributes to solving questions of resource allocation - shelters may save resources on low days in reserve for when they are highly needed.
+\newline
+\newline
+
+
+```{r, echo = FALSE}
+
+mean_occupancy_ratio= mean_occupancy_ratio_by_date$mean_occupancy_ratio
+days = c(1:365)
+tibble(days,mean_occupancy_ratio) %>% 
+  ggplot(aes(x=days,y=mean_occupancy_ratio)) +
+  theme_classic() +
+  geom_point()+
+  labs(title="Scatterplot of Daily Mean Occupation Rate",
+       x = "Day of the Year",
+       y = "Mean Occupancy Ratio across all Shelters" )
+
+```
+
+The above scatterplot looks at the daily mean occupancy rate of all shelters across Toronto in 2019. For example, day 1 would be January 1, 2019. This scatterplot allows us to track any relationship between the time of the year and the general usage of shelters. Because of its mostly horizontal shape, we can determine that there is no positive or negative correlation between these two variables. However, the usage of shelters appears to be less varied from summer onward, implying that there were factors that changed to make sheltering programs a more stable option. It is unclear what they are if there are any.
+\newline
+\newline
+
+```{r, echo= FALSE}
+mean_occupancy_ratio_by_sector_and_shelter <- data %>% group_by(SECTOR,SHELTER_NAME) %>% summarise(mean_occupancy_ratio=mean(OCCUPANCY_RATIO))
+
+mean_occupancy_ratio_by_sector_and_shelter %>% group_by(SECTOR) %>%
+  ggplot(aes(x=SECTOR,y=mean_occupancy_ratio)) +
+  theme_classic() +
+  geom_boxplot() +
+  labs(title = "Boxplot of Mean Occupancy Ratios by Sector",
+       y = "Mean Occupancy Ratio")
+```
+The above boxplot shows the mean occupancy ratio of all shelters throughout the entire year, as separated by sectors. This is to demonstrate which group is most consistently at risk. The type of shelter with the greatest interquartile range of mean occupancy rates is families. This means that the number of families in shelters varies greatly. We must note that co-ed shelters have at least one wildly different anomaly in mean occupancy rates. This can be explained by the fact that a few shelters have very small capacities so the presence of 1 or 2 users can widely shift the occupancy rate. As a whole, women seem to use the shelters most consistently, implying that they have a greater dependence on the programs that shelters provide, thus reinforcing the great need for these shelters to exist. 
+\newline
+\newline
+To conclude, we have examined a dataset from the city of Toronto on daily shelter occupancy in 2019. The focus of our investigation has been on occupancy rates. We have looked at two main aspects: the sector which these shelters serve and the usage of shelters over different days of the year. We have determined that there appears to be no discernible seasonal factor that makes people more inclined to use shelters at certain seasons. However, occupancy rates stabilized slightly more in the second half of the year. Why this happened is unclear.
+\newline
+\newline
+We have determined the important role that shelters play in accommodating women: not only are shelters for women the most filled but this high occupancy rate is also the most consistent. Thus it can be inferred that women are the most dependent on these programs and are the group most at risk.
+\newline
+\newline
+The overall consistently high rate of shelter occupancy throughout the city of Toronto and across all sectors and dates underscores the indisputable importance of these facilities in supporting those who are most vulnerable. It does not bode well that Canada's most populous city experiences such unwavering high rates of homelessness and that our services to support them are constantly being used to their limits. 
+\newline
+\newline
+All analysis for this report was programmed using `R version 4.0.2` and written
+on R Markdown using RStudio. 
+
+
+## Bibliography
+
+1. Grolemund, G. (2014, July 16) *Introduction to R Markdown*. RStudio. [https://rmarkdown.rstudio.com/articles_intro.html](https://rmarkdown.rstudio.com/articles_intro.html). (Last Accessed: January 15, 2021) 
+
+2. Dekking, F. M., et al. (2005) *A Modern Introduction to Probability and Statistics: Understanding why and how.* Springer Science & Business Media.
+
+3.  Allaire, J.J., et. el. *References: Introduction to R Markdown*. RStudio. [https://rmarkdown.rstudio.com/docs/](https://rmarkdown.rstudio.com/docs/). (Last Accessed: January 15, 2021) 
+
+4.  (2021, January 23) *Daily Shelter Occupancy*. [https://open.toronto.ca/dataset/daily-shelter-occupancy/](https://open.toronto.ca/dataset/daily-shelter-occupancy/). Shelter, Support & Housing Administration (Last Accessed: January 24, 2021)
+
+
+
+
+
+
+
